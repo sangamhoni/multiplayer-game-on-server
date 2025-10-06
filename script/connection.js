@@ -1,9 +1,9 @@
 class GameConnection {
     constructor(url) {
         this.socket = new WebSocket('wss://codepath-mmorg.onrender.com');
-        this.onPlayerUpdate = null;
+        this.onGameStateUpdate = null; // New callback for all game state updates
         this.pressedKeys = new Set();
-        this.currentPlayer = null;  // Store current player data
+        this.currentPlayerId = null; // Store current player ID
 
         // Add keyboard listeners
         window.addEventListener('keydown', this.handleKeyDown.bind(this));
@@ -19,38 +19,33 @@ class GameConnection {
             console.log('Received message:', message);
 
             if (message.action === 'join_game' && message.success) {
-                if (this.onPlayerUpdate) {
-                    const player = message.players[message.playerId];
-                    const avatarData = message.avatars[player.avatar];
-                    
-                    // Store initial player state
-                    this.currentPlayer = {
-                        id: message.playerId,
-                        x: player.x,
-                        y: player.y,
-                        username: player.username,
-                        avatar: player.avatar,
-                        frames: avatarData.frames
-                    };
-
-                    this.onPlayerUpdate(this.currentPlayer);
+                this.currentPlayerId = message.playerId;
+                if (this.onGameStateUpdate) {
+                    // Initial game state with all players and avatars
+                    this.onGameStateUpdate({
+                        players: message.players,
+                        avatars: message.avatars
+                    });
                 }
-            } 
+            }
             else if (message.action === 'players_moved') {
-                if (this.onPlayerUpdate && this.currentPlayer) {
-                    // Get updated position for current player
-                    const updatedPlayer = message.players[this.currentPlayer.id];
-                    if (updatedPlayer) {
-                        // Update position while keeping other data
-                        this.currentPlayer = {
-                            ...this.currentPlayer,
-                            x: updatedPlayer.x,
-                            y: updatedPlayer.y
-                        };
-                        
-                        console.log('Player moved to:', this.currentPlayer.x, this.currentPlayer.y);
-                        this.onPlayerUpdate(this.currentPlayer);
-                    }
+                if (this.onGameStateUpdate) {
+                    this.onGameStateUpdate({ players: message.players });
+                }
+            }
+            else if (message.action === 'player_joined') {
+                const newPlayer = { [message.player.id]: message.player };
+                const newAvatar = { [message.avatar.name]: message.avatar };
+                if (this.onGameStateUpdate) {
+                    this.onGameStateUpdate({
+                        players: newPlayer,
+                        avatars: newAvatar
+                    });
+                }
+            }
+            else if (message.action === 'player_left') {
+                if (this.onGameStateUpdate) {
+                    this.onGameStateUpdate({ playerLeftId: message.playerId });
                 }
             }
         };
@@ -67,7 +62,6 @@ class GameConnection {
 
         this.pressedKeys.add(event.key);
 
-        // Map arrow keys to exact direction strings the server expects
         switch (event.key) {
             case 'ArrowUp':
                 this.movePlayer('up');
@@ -88,12 +82,13 @@ class GameConnection {
         console.log('Sending move command:', direction);
         this.socket.send(JSON.stringify({
             action: 'move',
-            direction: direction  // Using single letters: N, S, E, W
+            direction: direction
         }));
     }
 
     handleKeyUp(event) {
         this.pressedKeys.delete(event.key);
+        this.socket.send(JSON.stringify({ action: 'stop' }));
     }
 
     joinGame() {

@@ -3,13 +3,22 @@ class Game {
         this.renderer = new Renderer();
         this.connection = new GameConnection();
         this.gameState = {
-            player: null
+            players: {},
+            avatars: {}
         };
 
         // Set up connection callback
-        this.connection.onPlayerUpdate = (playerData) => {
-            console.log('Game received player update:', playerData);
-            this.gameState.player = playerData;
+        this.connection.onGameStateUpdate = (update) => {
+            console.log('Game received state update:', update);
+            if (update.players) {
+                this.gameState.players = { ...this.gameState.players, ...update.players };
+            }
+            if (update.avatars) {
+                this.gameState.avatars = { ...this.gameState.avatars, ...update.avatars };
+            }
+            if (update.playerLeftId) {
+                delete this.gameState.players[update.playerLeftId];
+            }
         };
 
         // Start game loop
@@ -17,7 +26,9 @@ class Game {
     }
 
     gameLoop() {
-        this.renderer.render(this.gameState);
+        const currentPlayerId = this.connection.currentPlayerId;
+        const myPlayer = this.gameState.players[currentPlayerId];
+        this.renderer.render(this.gameState, myPlayer);
         requestAnimationFrame(this.gameLoop.bind(this));
     }
 }
