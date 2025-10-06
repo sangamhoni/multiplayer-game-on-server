@@ -6,22 +6,14 @@ class Renderer {
         this.worldMap.src = './assets/world.jpg';
         this.mapLoaded = false;
         this.avatarCache = new Map();
-        
-        // Bind methods
-        this.resizeCanvas = this.resizeCanvas.bind(this);
-        
-        // Setup event listeners
-        window.addEventListener('resize', this.resizeCanvas);
-        this.resizeCanvas();
 
-        // Handle map loading
         this.worldMap.onload = () => {
             console.log('World map loaded');
             this.mapLoaded = true;
         };
-        this.worldMap.onerror = () => {
-            console.error('Failed to load world map');
-        };
+
+        window.addEventListener('resize', this.resizeCanvas.bind(this));
+        this.resizeCanvas();
     }
 
     resizeCanvas() {
@@ -30,18 +22,15 @@ class Renderer {
     }
 
     calculateViewport(playerX, playerY) {
-        const viewportX = Math.max(0, 
-            Math.min(playerX - this.canvas.width / 2, 
-                    2048 - this.canvas.width));
-        const viewportY = Math.max(0, 
-            Math.min(playerY - this.canvas.height / 2, 
-                    2048 - this.canvas.height));
-        return { x: viewportX, y: viewportY };
+        return {
+            x: Math.max(0, Math.min(playerX - this.canvas.width / 2, 2048 - this.canvas.width)),
+            y: Math.max(0, Math.min(playerY - this.canvas.height / 2, 2048 - this.canvas.height))
+        };
     }
 
     async loadAvatar(playerData) {
         if (!playerData.frames || !playerData.frames.south) {
-            console.error('Invalid frame data:', playerData);
+            console.error('No frames data:', playerData);
             return null;
         }
 
@@ -55,38 +44,26 @@ class Renderer {
 
     render(gameState) {
         if (!this.mapLoaded || !gameState.player) {
-            console.log('Not rendering:', {
-                mapLoaded: this.mapLoaded,
-                hasPlayer: !!gameState.player
-            });
             return;
         }
 
-        console.log('Rendering game state:', gameState);
-        
-        const viewport = this.calculateViewport(
-            gameState.player.x, 
-            gameState.player.y
-        );
+        const viewport = this.calculateViewport(gameState.player.x, gameState.player.y);
 
-        // Clear canvas
+        // Clear and draw world
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Draw world map with viewport offset
         this.ctx.drawImage(this.worldMap, -viewport.x, -viewport.y);
 
-        // Draw player if avatar is loaded
+        // Handle player rendering
         if (this.avatarCache.has(gameState.player.id)) {
             this.drawPlayer(gameState.player, viewport);
         } else if (gameState.player.frames) {
             this.loadAvatar(gameState.player)
                 .then(img => {
                     if (img) {
-                        console.log('Avatar loaded successfully');
                         this.avatarCache.set(gameState.player.id, img);
                     }
                 })
-                .catch(err => console.error('Avatar load error:', err));
+                .catch(console.error);
         }
     }
 
@@ -97,7 +74,6 @@ class Renderer {
         const x = player.x - viewport.x;
         const y = player.y - viewport.y;
 
-        // Draw avatar
         this.ctx.drawImage(img, x, y);
 
         // Draw username
